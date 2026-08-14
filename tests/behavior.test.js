@@ -69,6 +69,21 @@ test("safe-send guard refuses a missing button without throwing", () => {
   assert.equal(controller.canSend(), false);
 });
 
+test("auto reply activation is blocked while composer is EMPTY", async () => {
+  const GPTWULF = load(["src/shared/constants.js", "src/content/auto-reply.js"]);
+  const engine = {
+    evaluate: () => ({ state: GPTWULF.STATES.EMPTY, confidence: 0.95 }),
+    setState: () => {},
+    onChange: () => () => {}
+  };
+  let sends = 0;
+  const composer = { send: async () => { sends += 1; }, inject: async () => { sends += 100; } };
+  const auto = new GPTWULF.AutoReplyController(composer, engine);
+  auto.configure({ enabled: true, repeatMode: false, prompt: "hello" });
+  assert.equal(await auto.submitOnce(), false);
+  assert.equal(sends, 0);
+});
+
 test("auto reply locks duplicate submissions until generation completes", async () => {
   const GPTWULF = load(["src/shared/constants.js", "src/content/auto-reply.js"]);
   let state = GPTWULF.STATES.READY;
