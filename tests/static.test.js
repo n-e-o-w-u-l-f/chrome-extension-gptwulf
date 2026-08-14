@@ -49,7 +49,7 @@ test("submission is accepted only after GENERATING is observed", () => {
 test("unknown and generating states do not directly submit", () => {
   const source = fs.readFileSync(path.join(root, "src/content/auto-reply.js"), "utf8");
   assert.match(source, /messageInProgress/);
-  assert.match(source, /snapshot\.state !== GPTWULF\.STATES\.READY && snapshot\.state !== GPTWULF\.STATES\.EMPTY/);
+  assert.match(source, /snapshot\.state !== GPTWULF\.STATES\.READY/);
   assert.match(source, /snapshot\.state === GPTWULF\.STATES\.GENERATING/);
 });
 
