@@ -11,6 +11,7 @@ class AutoReplyController {
     this.lastSubmission = null;
     this.generationStarted = false;
     this.pendingActivation = false;
+    this.repeatTimer = null;
     this.initialized = false;
     this.unsubscribe = stateEngine.onChange((snapshot) => this.handleState(snapshot));
   }
@@ -30,8 +31,14 @@ class AutoReplyController {
   }
 
   resetLock() {
+    if (this.repeatTimer) {
+      clearTimeout(this.repeatTimer);
+      this.repeatTimer = null;
+    }
     this.messageInProgress = false;
     this.generationStarted = false;
+    this.lastSubmission = null;
+    this.pendingActivation = false;
   }
 
   hashPrompt(prompt) {
@@ -45,7 +52,7 @@ class AutoReplyController {
 
   async submitOnce() {
     if (!this.enabled || this.messageInProgress || !this.prompt.trim()) return false;
-    const snapshot = this.stateEngine.evaluate();
+    let snapshot = this.stateEngine.evaluate();
     if (snapshot.state !== GPTWULF.STATES.READY && snapshot.state !== GPTWULF.STATES.EMPTY) return false;
 
     const id = crypto.randomUUID();
@@ -53,7 +60,14 @@ class AutoReplyController {
     this.messageInProgress = true;
     this.pendingActivation = false;
     try {
-      await this.composer.send(this.prompt);
+      if (snapshot.state === GPTWULF.STATES.EMPTY) {
+        await this.composer.inject(this.prompt);
+        snapshot = this.stateEngine.evaluate();
+        if (snapshot.state !== GPTWULF.STATES.READY) throw new Error("Composer was not ready after injection");
+        await this.composer.send();
+      } else {
+        await this.composer.send(this.prompt);
+      }
       this.generationStarted = true;
       return true;
     } catch (error) {
@@ -66,7 +80,7 @@ class AutoReplyController {
 
   handleState(snapshot) {
     if (!this.enabled) return;
-    if (this.pendingActivation && (snapshot.state === GPTWULF.STATES.READY || snapshot.state === GPTWULF.STATES.EMPTY)) {
+    if (this.pendingActivation && snapshot.state === GPTWULF.STATES.READY) {
       void this.submitOnce();
       return;
     }
@@ -78,11 +92,17 @@ class AutoReplyController {
     if (this.generationStarted && snapshot.state === GPTWULF.STATES.READY) {
       this.messageInProgress = false;
       this.generationStarted = false;
-      if (this.repeatMode) setTimeout(() => this.submitOnce(), 250);
+      if (this.repeatMode) {
+        this.repeatTimer = setTimeout(() => {
+          this.repeatTimer = null;
+          void this.submitOnce();
+        }, 250);
+      }
     }
   }
 
   destroy() {
+    this.resetLock();
     this.unsubscribe?.();
   }
 }
