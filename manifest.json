@@ -3,12 +3,24 @@
   "name": "GPT-Wulf",
   "version": "0.1.0",
   "description": "Intelligente Auto-Reply-Automatisierung für die sichtbare ChatGPT-Weboberfläche.",
+  "icons": {
+    "16": "assets/icons/icon16.png",
+    "32": "assets/icons/icon32.png",
+    "48": "assets/icons/icon48.png",
+    "128": "assets/icons/icon128.png"
+  },
   "permissions": ["storage"],
   "host_permissions": ["https://chatgpt.com/*"],
   "background": {
     "service_worker": "src/background/service-worker.js"
   },
   "action": {
+    "default_icon": {
+      "16": "assets/icons/icon16.png",
+      "32": "assets/icons/icon32.png",
+      "48": "assets/icons/icon48.png",
+      "128": "assets/icons/icon128.png"
+    },
     "default_title": "GPT-Wulf",
     "default_popup": "src/popup/popup.html"
   },
