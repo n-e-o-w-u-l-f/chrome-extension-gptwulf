@@ -1,0 +1,27 @@
+name: GPT-Wulf CI
+
+on:
+  push:
+    paths:
+      - "manifest.json"
+      - "package.json"
+      - "src/**"
+      - "tests/**"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    paths:
+      - "manifest.json"
+      - "package.json"
+      - "src/**"
+      - "tests/**"
+      - ".github/workflows/ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
