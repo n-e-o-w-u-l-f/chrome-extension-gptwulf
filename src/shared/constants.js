@@ -21,10 +21,11 @@ GPTWULF.DEFAULT_SETTINGS = Object.freeze({
 
 GPTWULF.SELECTORS = Object.freeze({
   submitButton: [
-    '[data-testid="send-button"]',
+    'button[data-testid="send-button"]',
     '#composer-submit-button'
   ],
   composerInputs: [
+    "#prompt-textarea",
     "textarea",
     '[contenteditable="true"]'
   ]
