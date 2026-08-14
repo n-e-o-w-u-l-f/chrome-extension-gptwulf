@@ -22,7 +22,6 @@ class AutoReplyController {
     this.repeatMode = Boolean(repeatMode);
     this.prompt = typeof prompt === "string" ? prompt : "";
     if (!this.enabled) {
-      this.pendingActivation = false;
       this.resetLock();
     } else if (this.initialized && !wasEnabled) {
       this.pendingActivation = true;
@@ -52,22 +51,18 @@ class AutoReplyController {
 
   async submitOnce() {
     if (!this.enabled || this.messageInProgress || !this.prompt.trim()) return false;
-    let snapshot = this.stateEngine.evaluate();
-    if (snapshot.state !== GPTWULF.STATES.READY && snapshot.state !== GPTWULF.STATES.EMPTY) return false;
+
+    // Auto Reply is deliberately stricter than ordinary composer use:
+    // activation can only submit from an already verified READY state.
+    const snapshot = this.stateEngine.evaluate();
+    if (snapshot.state !== GPTWULF.STATES.READY) return false;
 
     const id = crypto.randomUUID();
     this.lastSubmission = { id, promptHash: this.hashPrompt(this.prompt), submittedAt: Date.now() };
     this.messageInProgress = true;
     this.pendingActivation = false;
     try {
-      if (snapshot.state === GPTWULF.STATES.EMPTY) {
-        await this.composer.inject(this.prompt);
-        snapshot = this.stateEngine.evaluate();
-        if (snapshot.state !== GPTWULF.STATES.READY) throw new Error("Composer was not ready after injection");
-        await this.composer.send();
-      } else {
-        await this.composer.send(this.prompt);
-      }
+      await this.composer.send(this.prompt);
       this.generationStarted = true;
       return true;
     } catch (error) {
