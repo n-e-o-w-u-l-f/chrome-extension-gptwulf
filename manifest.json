@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "GPT-Wulf",
+  "version": "0.1.0",
+  "description": "Intelligente Auto-Reply-Automatisierung für die sichtbare ChatGPT-Weboberfläche.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://chatgpt.com/*"],
+  "background": {
+    "service_worker": "src/background/service-worker.js"
+  },
+  "action": {
+    "default_title": "GPT-Wulf",
+    "default_popup": "src/popup/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*"],
+      "js": [
+        "src/shared/constants.js",
+        "src/shared/storage.js",
+        "src/content/chatgpt-dom.js",
+        "src/content/chatgpt-state.js",
+        "src/content/composer.js",
+        "src/content/auto-reply.js",
+        "src/content/content.js"
+      ],
+      "css": ["src/content/content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
