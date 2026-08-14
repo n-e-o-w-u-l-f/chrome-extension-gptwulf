@@ -1,0 +1,9 @@
+{
+  "name": "chrome-extension-gptwulf",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GPT-Wulf Chrome Extension",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}
