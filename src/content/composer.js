@@ -34,6 +34,16 @@ class ComposerController {
     return mode.mode === "SEND" && mode.confidence >= 0.8 && button.disabled === false;
   }
 
+  async waitForGenerating(timeoutMs = 2000, intervalMs = 100) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() <= deadline) {
+      const snapshot = this.stateEngine.evaluate();
+      if (snapshot.state === GPTWULF.STATES.GENERATING) return snapshot;
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    return this.stateEngine.evaluate();
+  }
+
   async send(prompt) {
     if (prompt) await this.inject(prompt);
     if (!this.canSend()) throw new Error("ChatGPT is not safely ready to send");
@@ -48,8 +58,11 @@ class ComposerController {
 
     this.stateEngine.setState(GPTWULF.STATES.SUBMITTING, 1);
     this.adapter.submit(button);
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    const next = this.stateEngine.evaluate();
+
+    // ChatGPT can need a short amount of time to replace the send control
+    // with the generation/stop control. Poll only for a bounded period; if
+    // GENERATING is never observed, the submission remains unverified.
+    const next = await this.waitForGenerating();
     if (next.state !== GPTWULF.STATES.GENERATING) {
       this.stateEngine.setState(GPTWULF.STATES.ERROR, 1, { reason: "submission-not-verified", observedState: next.state });
       throw new Error("Submission could not be verified");
