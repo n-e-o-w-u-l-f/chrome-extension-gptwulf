@@ -1,0 +1,9 @@
+GPT-Wulf local build
+Build pipeline: scripts/build.mjs
+Manifest: MV3
+Host permission: https://chatgpt.com/*
+Permissions: storage
+Runtime network: none
+API/token/cookie access: none
+Live ChatGPT E2E: NOT VERIFIED
+Load target: chrome://extensions -> Developer mode -> Load unpacked -> select this build directory
