@@ -34,9 +34,16 @@ test("manifest is MV3 and restricted to ChatGPT", () => {
 
 test("safe-send guard requires READY and SEND", () => {
   const source = fs.readFileSync(path.join(root, "src/content/composer.js"), "utf8");
-  assert.match(source, /snapshot\.state === GPTWULF\.STATES\.READY/);
+  assert.match(source, /snapshot\.state !== GPTWULF\.STATES\.READY/);
   assert.match(source, /mode\.mode === "SEND"/);
-  assert.match(source, /!button\.disabled/);
+  assert.match(source, /button\.disabled === false/);
+  assert.match(source, /if \(!button\) return false/);
+});
+
+test("submission is accepted only after GENERATING is observed", () => {
+  const source = fs.readFileSync(path.join(root, "src/content/composer.js"), "utf8");
+  assert.match(source, /next\.state !== GPTWULF\.STATES\.GENERATING/);
+  assert.match(source, /submission-not-verified/);
 });
 
 test("unknown and generating states do not directly submit", () => {
@@ -44,4 +51,17 @@ test("unknown and generating states do not directly submit", () => {
   assert.match(source, /messageInProgress/);
   assert.match(source, /snapshot\.state !== GPTWULF\.STATES\.READY && snapshot\.state !== GPTWULF\.STATES\.EMPTY/);
   assert.match(source, /snapshot\.state === GPTWULF\.STATES\.GENERATING/);
+});
+
+test("content script resets auto-reply lock on conversation changes", () => {
+  const source = fs.readFileSync(path.join(root, "src/content/content.js"), "utf8");
+  assert.match(source, /conversationId !== lastConversationId/);
+  assert.match(source, /autoReply\.resetLock\(\)/);
+});
+
+test("source contains no network or credential access primitives", () => {
+  const source = jsFiles.map((relative) => fs.readFileSync(path.join(root, relative), "utf8")).join("\n");
+  assert.doesNotMatch(source, /\bfetch\s*\(|XMLHttpRequest|WebSocket|navigator\.sendBeacon/);
+  assert.doesNotMatch(source, /document\.cookie|chrome\.cookies|localStorage\b|sessionStorage\b/);
+  assert.doesNotMatch(source, /Authorization\s*:|Bearer\s+[A-Za-z0-9._-]+/i);
 });
