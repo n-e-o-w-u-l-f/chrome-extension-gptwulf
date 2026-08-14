@@ -42,30 +42,21 @@ class ChatGPTDOMAdapter {
   }
 
   findSubmitButton() {
-    const direct = [];
-    for (const selector of GPTWULF.SELECTORS.submitButton) {
-      for (const button of document.querySelectorAll(selector)) {
-        if (button instanceof HTMLButtonElement && this.isVisible(button)) direct.push(button);
-      }
-    }
-    if (direct.length) {
-      const composer = this.findComposer();
-      const container = composer ? this.findComposerContainer(composer) : null;
-      if (container) {
-        const contextual = direct.find((button) => container.contains(button));
-        if (contextual) return contextual;
-      }
-      return direct[direct.length - 1];
-    }
-
     const composer = this.findComposer();
     const container = composer ? this.findComposerContainer(composer) : null;
     if (!container) return null;
 
+    for (const selector of GPTWULF.SELECTORS.submitButton) {
+      const contextual = [...container.querySelectorAll(selector)].find((button) => button instanceof HTMLButtonElement && this.isVisible(button));
+      if (contextual) return contextual;
+    }
+
     const buttons = [...container.querySelectorAll("button")].filter((button) => this.isVisible(button));
     const semantic = buttons.find((button) => {
       const label = (button.getAttribute("aria-label") || "").toLowerCase();
-      return /(send|senden|submit|stop|cancel|abbrechen|stopp)/i.test(label);
+      const title = (button.getAttribute("title") || "").toLowerCase();
+      const testid = (button.getAttribute("data-testid") || "").toLowerCase();
+      return /(send|senden|submit|stop|cancel|abbrechen|stopp)/i.test(`${label} ${title} ${testid}`);
     });
     return semantic || null;
   }
@@ -75,10 +66,12 @@ class ChatGPTDOMAdapter {
     const use = button.querySelector("use");
     const iconHref = use?.getAttribute("href") || use?.getAttribute("xlink:href") || "";
     const aria = button.getAttribute("aria-label") || "";
+    const title = button.getAttribute("title") || "";
     const testid = button.getAttribute("data-testid") || "";
     return {
       disabled: button.disabled,
       ariaLabel: aria,
+      title,
       dataTestId: testid,
       className: typeof button.className === "string" ? button.className : "",
       iconHref,
@@ -118,10 +111,9 @@ class ChatGPTDOMAdapter {
     const evidence = this.getButtonEvidence(button);
     if (!evidence) return { mode: "UNKNOWN", confidence: 0 };
 
-    const label = evidence.ariaLabel.toLowerCase();
-    const icon = evidence.iconHref.toLowerCase();
-    const stopSignals = ["stop", "cancel", "abbrechen", "stopp"].some((x) => label.includes(x) || icon.includes(x));
-    const sendSignals = ["send", "senden", "submit", "send-prompt"].some((x) => label.includes(x) || icon.includes(x));
+    const label = `${evidence.ariaLabel} ${evidence.title} ${evidence.dataTestId} ${evidence.iconHref}`.toLowerCase();
+    const stopSignals = ["stop", "cancel", "abbrechen", "stopp"].some((x) => label.includes(x));
+    const sendSignals = ["send", "senden", "submit", "send-prompt"].some((x) => label.includes(x));
 
     if (stopSignals && !sendSignals) return { mode: "STOP", confidence: 0.9 };
     if (sendSignals && !evidence.disabled) return { mode: "SEND", confidence: 0.95 };
