@@ -41,17 +41,25 @@ The state engine distinguishes `UNKNOWN`, `EMPTY`, `READY`, `SUBMITTING`, `GENER
 
 A non-empty composer with a disabled send button is now `UNKNOWN`, not `EMPTY`. `UNKNOWN` is always send-blocking.
 
-The safe-send path re-evaluates the state, composer, submit button, button mode, confidence, and `disabled` property immediately before the click. After the click, submission is accepted only when `GENERATING` is observed. A return to `READY` without an observed `GENERATING` transition is treated as an unverified submission.
+The safe-send path re-evaluates the state, composer, submit button, button mode, confidence, and `disabled` property immediately before the click. After the click, submission is accepted only when `GENERATING` is observed.
+
+Because the ChatGPT UI may need a short interval to replace the send control with the generation/stop control, the post-click verification polls the state for a bounded maximum of 2 seconds at 100-ms intervals. If `GENERATING` is never observed, the submission is marked unverified and becomes `ERROR`; the extension does not retry the click.
+
+A return to `READY`, `EMPTY`, or `UNKNOWN` without an observed `GENERATING` transition is therefore never treated as successful submission.
 
 ## Auto Reply and navigation
 
 Auto Reply requires an explicit enable action. A reload does not automatically resume a submission. On conversation change, the Auto Reply lock, generation marker, last submission, pending activation, and pending Repeat Mode timer are reset. Resetting the lock does not submit anything.
 
+Auto Reply itself is stricter than ordinary composer use: it may submit only when the current state is already `READY`. It does not inject a prompt into an `EMPTY` composer as part of activation.
+
 Repeat Mode is scheduled only after a verified `GENERATING -> READY` transition. A pending repeat timer is cancelled by `resetLock()`.
 
 ## Local behavior tests
 
-`tests/behavior.test.js` isolates the state engine, safe-send guard, and Auto Reply lock using small adapters/mocks. `tests/static.test.js` additionally checks syntax, manifest restrictions, safe-send invariants, navigation lock reset, and absence of network/cookie/credential access primitives.
+`tests/behavior.test.js` isolates the state engine, safe-send guard, bounded post-submit verification, and Auto Reply lock using small adapters/mocks. `tests/static.test.js` additionally checks syntax, manifest restrictions, safe-send invariants, navigation lock reset, and absence of network/cookie/credential access primitives.
+
+The tests are designed to run with Node's built-in test runner. The latest repository changes could not be executed in the local development environment after commit because outbound GitHub DNS/network access is unavailable there; this must not be represented as a successful local test run. GitHub Actions should provide the authoritative execution result when available.
 
 These tests validate the safety logic but do **not** substitute for live ChatGPT verification.
 
@@ -84,6 +92,6 @@ Run this manually in a dedicated Chrome profile with the unpacked extension load
 
 Until the checklist above has been performed successfully in a real browser session, the repository status is:
 
-**Automated safety tests: verified locally in the development environment.**
+**Behavior tests: implemented; latest additions awaiting execution by local Node/CI.**
 
 **Live ChatGPT DOM/E2E compatibility: not verified.**
