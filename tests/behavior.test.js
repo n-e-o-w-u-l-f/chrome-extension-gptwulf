@@ -36,6 +36,22 @@ test("state engine never treats a disabled send button with text as READY", () =
   assert.ok(snapshot.confidence < 0.8);
 });
 
+test("state engine follows READY -> GENERATING when button evidence changes", () => {
+  const GPTWULF = load(["src/shared/constants.js", "src/content/chatgpt-state.js"]);
+  let mode = "SEND";
+  const adapter = {
+    isChatGPT: () => true,
+    findComposer: () => ({}),
+    findSubmitButton: () => ({}),
+    detectButtonMode: () => ({ mode, confidence: 0.95 }),
+    getComposerValue: () => "hello"
+  };
+  const engine = new GPTWULF.ChatGPTStateEngine(adapter);
+  assert.equal(engine.evaluate().state, GPTWULF.STATES.READY);
+  mode = "STOP";
+  assert.equal(engine.evaluate().state, GPTWULF.STATES.GENERATING);
+});
+
 test("UNKNOWN and GENERATING cannot pass the safe-send guard", () => {
   const GPTWULF = load(["src/shared/constants.js", "src/content/composer.js"]);
   let state = GPTWULF.STATES.UNKNOWN;
@@ -67,6 +83,32 @@ test("safe-send guard refuses a missing button without throwing", () => {
   const controller = new GPTWULF.ComposerController(adapter, engine);
   assert.doesNotThrow(() => controller.canSend());
   assert.equal(controller.canSend(), false);
+});
+
+test("post-submit verification waits for GENERATING instead of accepting an intermediate state", async () => {
+  const GPTWULF = load(["src/shared/constants.js", "src/content/composer.js"]);
+  let evaluations = 0;
+  let state = GPTWULF.STATES.READY;
+  const engine = {
+    evaluate: () => {
+      evaluations += 1;
+      if (evaluations >= 2) state = GPTWULF.STATES.GENERATING;
+      return { state, confidence: 0.95 };
+    },
+    setState: (next) => { state = next; }
+  };
+  const button = { disabled: false };
+  const adapter = {
+    findSubmitButton: () => button,
+    detectButtonMode: () => ({ mode: "SEND", confidence: 0.95 }),
+    submit: () => {},
+    setComposerValue: async () => {},
+    getComposerValue: () => "hello"
+  };
+  const controller = new GPTWULF.ComposerController(adapter, engine);
+  const result = await controller.send();
+  assert.equal(result.state, GPTWULF.STATES.GENERATING);
+  assert.ok(evaluations >= 2);
 });
 
 test("auto reply activation is blocked while composer is EMPTY", async () => {
