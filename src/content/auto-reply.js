@@ -10,21 +10,26 @@ class AutoReplyController {
     this.messageInProgress = false;
     this.lastSubmission = null;
     this.generationStarted = false;
-    this.stopRequested = false;
+    this.pendingActivation = false;
     this.unsubscribe = stateEngine.onChange((snapshot) => this.handleState(snapshot));
   }
 
   configure({ enabled, repeatMode, prompt }) {
+    const wasEnabled = this.enabled;
     this.enabled = Boolean(enabled);
     this.repeatMode = Boolean(repeatMode);
     this.prompt = typeof prompt === "string" ? prompt : "";
-    if (!this.enabled) this.resetLock();
+    if (!this.enabled) {
+      this.pendingActivation = false;
+      this.resetLock();
+    } else if (!wasEnabled) {
+      this.pendingActivation = true;
+    }
   }
 
   resetLock() {
     this.messageInProgress = false;
     this.generationStarted = false;
-    this.stopRequested = false;
   }
 
   hashPrompt(prompt) {
@@ -44,6 +49,7 @@ class AutoReplyController {
     const id = crypto.randomUUID();
     this.lastSubmission = { id, promptHash: this.hashPrompt(this.prompt), submittedAt: Date.now() };
     this.messageInProgress = true;
+    this.pendingActivation = false;
     try {
       await this.composer.send(this.prompt);
       this.generationStarted = true;
@@ -57,7 +63,12 @@ class AutoReplyController {
   }
 
   handleState(snapshot) {
-    if (!this.enabled || !this.messageInProgress) return;
+    if (!this.enabled) return;
+    if (this.pendingActivation && (snapshot.state === GPTWULF.STATES.READY || snapshot.state === GPTWULF.STATES.EMPTY)) {
+      void this.submitOnce();
+      return;
+    }
+    if (!this.messageInProgress) return;
     if (snapshot.state === GPTWULF.STATES.GENERATING) {
       this.generationStarted = true;
       return;
@@ -65,9 +76,7 @@ class AutoReplyController {
     if (this.generationStarted && snapshot.state === GPTWULF.STATES.READY) {
       this.messageInProgress = false;
       this.generationStarted = false;
-      if (this.repeatMode) {
-        setTimeout(() => this.submitOnce(), 250);
-      }
+      if (this.repeatMode) setTimeout(() => this.submitOnce(), 250);
     }
   }
 
