@@ -11,6 +11,7 @@ class AutoReplyController {
     this.lastSubmission = null;
     this.generationStarted = false;
     this.pendingActivation = false;
+    this.initialized = false;
     this.unsubscribe = stateEngine.onChange((snapshot) => this.handleState(snapshot));
   }
 
@@ -22,9 +23,10 @@ class AutoReplyController {
     if (!this.enabled) {
       this.pendingActivation = false;
       this.resetLock();
-    } else if (!wasEnabled) {
+    } else if (this.initialized && !wasEnabled) {
       this.pendingActivation = true;
     }
+    this.initialized = true;
   }
 
   resetLock() {
