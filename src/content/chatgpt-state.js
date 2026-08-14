@@ -52,8 +52,10 @@ class ChatGPTStateEngine {
       this.setState(GPTWULF.STATES.GENERATING, mode.confidence, evidence);
     } else if (mode.mode === "SEND" && value) {
       this.setState(GPTWULF.STATES.READY, mode.confidence, evidence);
-    } else if (mode.mode === "SEND_DISABLED" || !value) {
+    } else if (!value) {
       this.setState(GPTWULF.STATES.EMPTY, mode.confidence, evidence);
+    } else if (mode.mode === "SEND_DISABLED") {
+      this.setState(GPTWULF.STATES.UNKNOWN, Math.min(mode.confidence, 0.5), evidence);
     } else {
       this.setState(GPTWULF.STATES.UNKNOWN, Math.min(mode.confidence, 0.5), evidence);
     }
