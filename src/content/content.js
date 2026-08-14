@@ -12,14 +12,18 @@
   let checkTimer = null;
   let lastConversationId = adapter.getConversationId();
 
+  const resetForNavigation = () => {
+    const conversationId = adapter.getConversationId();
+    if (conversationId === lastConversationId) return false;
+    lastConversationId = conversationId;
+    autoReply.resetLock();
+    return true;
+  };
+
   const scheduleStateCheck = () => {
     clearTimeout(checkTimer);
     checkTimer = setTimeout(() => {
-      const conversationId = adapter.getConversationId();
-      if (conversationId !== lastConversationId) {
-        lastConversationId = conversationId;
-        autoReply.resetLock();
-      }
+      resetForNavigation();
       const snapshot = stateEngine.evaluate();
       debug("state", snapshot);
       updateInlineUI(snapshot);
@@ -38,15 +42,14 @@
         <label class="gptwulf-toggle"><input type="checkbox" data-gptwulf-repeat> Wiederholen</label>
       </div>`;
     root.querySelector("[data-gptwulf-auto]").addEventListener("change", async (event) => {
-      settings.autoReplyEnabled = event.target.checked;
-      await GPTWULF.Storage.setSettings({ autoReplyEnabled: settings.autoReplyEnabled });
+      settings = await GPTWULF.Storage.setSettings({ autoReplyEnabled: event.target.checked });
       autoReply.configure(settings);
-      if (settings.autoReplyEnabled) await autoReply.submitOnce();
+      // configure() creates a pending activation; the state engine must first
+      // observe READY. There is deliberately no direct submit here.
       scheduleStateCheck();
     });
     root.querySelector("[data-gptwulf-repeat]").addEventListener("change", async (event) => {
-      settings.repeatMode = event.target.checked;
-      await GPTWULF.Storage.setSettings({ repeatMode: settings.repeatMode });
+      settings = await GPTWULF.Storage.setSettings({ repeatMode: event.target.checked });
       autoReply.configure(settings);
     });
     document.body.appendChild(root);
@@ -58,9 +61,10 @@
     const repeat = document.querySelector("[data-gptwulf-repeat]");
     if (!status || !auto || !repeat) return;
     const labels = { READY: "● Bereit", EMPTY: "● Composer leer", GENERATING: "● ChatGPT generiert", UNKNOWN: "● Status unsicher", NOT_CHATGPT: "● Nicht ChatGPT", ERROR: "● Fehler", INJECTING: "● Eingabe wird eingesetzt", SUBMITTING: "● Senden", COMPLETED: "● Fertig" };
-    status.textContent = labels[snapshot.state] || `● ${snapshot.state}`;
-    auto.checked = settings.autoReplyEnabled;
-    repeat.checked = settings.repeatMode;
+    const nextStatus = labels[snapshot.state] || `● ${snapshot.state}`;
+    if (status.textContent !== nextStatus) status.textContent = nextStatus;
+    if (auto.checked !== settings.autoReplyEnabled) auto.checked = settings.autoReplyEnabled;
+    if (repeat.checked !== settings.repeatMode) repeat.checked = settings.repeatMode;
   };
 
   const handleMessage = async (message) => {
@@ -79,7 +83,7 @@
       case GPTWULF.MESSAGE_TYPES.ENABLE_AUTO_REPLY:
         settings = await GPTWULF.Storage.setSettings({ autoReplyEnabled: true });
         autoReply.configure(settings);
-        await autoReply.submitOnce();
+        scheduleStateCheck();
         return buildStatus();
       case GPTWULF.MESSAGE_TYPES.DISABLE_AUTO_REPLY:
         settings = await GPTWULF.Storage.setSettings({ autoReplyEnabled: false });
@@ -120,18 +124,29 @@
     return true;
   });
 
+  // The observer is deliberately limited to state-relevant mutations. Class
+  // churn during streaming is ignored, and UI writes are idempotent above.
   const observer = new MutationObserver(scheduleStateCheck);
-  observer.observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["disabled", "aria-label", "data-testid", "class"] });
+  observer.observe(document.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["disabled", "aria-label", "data-testid"]
+  });
 
   for (const method of ["pushState", "replaceState"]) {
     const original = history[method];
     history[method] = function (...args) {
       const result = original.apply(this, args);
+      resetForNavigation();
       window.dispatchEvent(new Event("gptwulf:navigation"));
       return result;
     };
   }
-  window.addEventListener("popstate", scheduleStateCheck);
+  window.addEventListener("popstate", () => {
+    resetForNavigation();
+    scheduleStateCheck();
+  });
   window.addEventListener("gptwulf:navigation", scheduleStateCheck);
 
   GPTWULF.Storage.getSettings().then((loaded) => {
