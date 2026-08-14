@@ -9,7 +9,7 @@ class ChatGPTDOMAdapter {
     if (!element || !element.isConnected) return false;
     const style = getComputedStyle(element);
     const rect = element.getBoundingClientRect();
-    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+    return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0" && rect.width > 0 && rect.height > 0;
   }
 
   isComposerCandidate(element) {
@@ -52,13 +52,19 @@ class ChatGPTDOMAdapter {
     }
 
     const buttons = [...container.querySelectorAll("button")].filter((button) => this.isVisible(button));
-    const semantic = buttons.find((button) => {
-      const label = (button.getAttribute("aria-label") || "").toLowerCase();
-      const title = (button.getAttribute("title") || "").toLowerCase();
-      const testid = (button.getAttribute("data-testid") || "").toLowerCase();
-      return /(send|senden|submit|stop|cancel|abbrechen|stopp)/i.test(`${label} ${title} ${testid}`);
-    });
-    return semantic || null;
+    const semanticMatches = buttons.map((button) => ({ button, evidence: this.getButtonEvidence(button) })).filter(({ evidence }) => evidence);
+    const scored = semanticMatches.map(({ button, evidence }) => {
+      const label = `${evidence.ariaLabel} ${evidence.title} ${evidence.dataTestId}`.toLowerCase();
+      let score = 0;
+      if (/\b(send|senden|submit)\b/.test(label)) score += 3;
+      if (/\b(stop|cancel|abbrechen|stopp)\b/.test(label)) score += 2;
+      if (evidence.dataTestId === "send-button") score += 3;
+      return { button, score };
+    }).filter(({ score }) => score > 0).sort((a, b) => b.score - a.score);
+
+    if (scored.length === 0) return null;
+    if (scored.length > 1 && scored[0].score === scored[1].score) return null;
+    return scored[0].button;
   }
 
   getButtonEvidence(button = this.findSubmitButton()) {
@@ -103,7 +109,8 @@ class ChatGPTDOMAdapter {
     range.selectNodeContents(element);
     selection?.removeAllRanges();
     selection?.addRange(range);
-    document.execCommand("insertText", false, value);
+    const inserted = document.execCommand("insertText", false, value);
+    if (!inserted) throw new Error("Contenteditable insertion failed");
     element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
   }
 
@@ -111,7 +118,7 @@ class ChatGPTDOMAdapter {
     const evidence = this.getButtonEvidence(button);
     if (!evidence) return { mode: "UNKNOWN", confidence: 0 };
 
-    const label = `${evidence.ariaLabel} ${evidence.title} ${evidence.dataTestId} ${evidence.iconHref}`.toLowerCase();
+    const label = `${evidence.ariaLabel} ${evidence.title} ${evidence.dataTestId}`.toLowerCase();
     const stopSignals = ["stop", "cancel", "abbrechen", "stopp"].some((x) => label.includes(x));
     const sendSignals = ["send", "senden", "submit", "send-prompt"].some((x) => label.includes(x));
 
