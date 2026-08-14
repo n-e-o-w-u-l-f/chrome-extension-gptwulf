@@ -25,22 +25,33 @@ class ComposerController {
 
   canSend() {
     const snapshot = this.stateEngine.evaluate();
+    if (snapshot.state !== GPTWULF.STATES.READY || snapshot.confidence < 0.8) return false;
+
     const button = this.adapter.findSubmitButton();
+    if (!button) return false;
+
     const mode = this.adapter.detectButtonMode(button);
-    return snapshot.state === GPTWULF.STATES.READY && snapshot.confidence >= 0.8 && mode.mode === "SEND" && mode.confidence >= 0.8 && !button.disabled;
+    return mode.mode === "SEND" && mode.confidence >= 0.8 && button.disabled === false;
   }
 
   async send(prompt) {
     if (prompt) await this.inject(prompt);
     if (!this.canSend()) throw new Error("ChatGPT is not safely ready to send");
+
     const button = this.adapter.findSubmitButton();
     if (!button) throw new Error("Submit button disappeared");
+
+    const finalMode = this.adapter.detectButtonMode(button);
+    if (finalMode.mode !== "SEND" || finalMode.confidence < 0.8 || button.disabled) {
+      throw new Error("Submit button is no longer safely sendable");
+    }
 
     this.stateEngine.setState(GPTWULF.STATES.SUBMITTING, 1);
     this.adapter.submit(button);
     await new Promise((resolve) => setTimeout(resolve, 100));
     const next = this.stateEngine.evaluate();
-    if (next.state !== GPTWULF.STATES.GENERATING && next.state !== GPTWULF.STATES.READY) {
+    if (next.state !== GPTWULF.STATES.GENERATING) {
+      this.stateEngine.setState(GPTWULF.STATES.ERROR, 1, { reason: "submission-not-verified", observedState: next.state });
       throw new Error("Submission could not be verified");
     }
     return next;
