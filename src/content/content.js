@@ -7,10 +7,7 @@
   const composer = new GPTWULF.ComposerController(adapter, stateEngine);
   const autoReply = new GPTWULF.AutoReplyController(composer, stateEngine);
 
-  const debug = (...args) => {
-    if (GPTWULF.DEBUG) console.debug("[GPT-Wulf]", ...args);
-  };
-
+  const debug = (...args) => { if (GPTWULF.DEBUG) console.debug("[GPT-Wulf]", ...args); };
   let settings = { ...GPTWULF.DEFAULT_SETTINGS };
   let checkTimer = null;
   let lastConversationId = adapter.getConversationId();
@@ -44,6 +41,8 @@
       settings.autoReplyEnabled = event.target.checked;
       await GPTWULF.Storage.setSettings({ autoReplyEnabled: settings.autoReplyEnabled });
       autoReply.configure(settings);
+      if (settings.autoReplyEnabled) await autoReply.submitOnce();
+      scheduleStateCheck();
     });
     root.querySelector("[data-gptwulf-repeat]").addEventListener("change", async (event) => {
       settings.repeatMode = event.target.checked;
@@ -58,17 +57,7 @@
     const auto = document.querySelector("[data-gptwulf-auto]");
     const repeat = document.querySelector("[data-gptwulf-repeat]");
     if (!status || !auto || !repeat) return;
-    const labels = {
-      READY: "● Bereit",
-      EMPTY: "● Composer leer",
-      GENERATING: "● ChatGPT generiert",
-      UNKNOWN: "● Status unsicher",
-      NOT_CHATGPT: "● Nicht ChatGPT",
-      ERROR: "● Fehler",
-      INJECTING: "● Eingabe wird eingesetzt",
-      SUBMITTING: "● Senden",
-      COMPLETED: "● Fertig"
-    };
+    const labels = { READY: "● Bereit", EMPTY: "● Composer leer", GENERATING: "● ChatGPT generiert", UNKNOWN: "● Status unsicher", NOT_CHATGPT: "● Nicht ChatGPT", ERROR: "● Fehler", INJECTING: "● Eingabe wird eingesetzt", SUBMITTING: "● Senden", COMPLETED: "● Fertig" };
     status.textContent = labels[snapshot.state] || `● ${snapshot.state}`;
     auto.checked = settings.autoReplyEnabled;
     repeat.checked = settings.repeatMode;
@@ -77,22 +66,20 @@
   const handleMessage = async (message) => {
     switch (message?.type) {
       case GPTWULF.MESSAGE_TYPES.GET_STATUS:
-        stateEngine.evaluate();
         return buildStatus();
       case GPTWULF.MESSAGE_TYPES.SET_PROMPT:
         settings = await GPTWULF.Storage.setSettings({ prompt: message.prompt || "" });
         autoReply.configure(settings);
         return buildStatus();
       case GPTWULF.MESSAGE_TYPES.SEND_PROMPT:
-        if (typeof message.prompt === "string" && message.prompt.trim()) {
-          settings = await GPTWULF.Storage.setSettings({ prompt: message.prompt });
-          autoReply.configure(settings);
-        }
+        if (typeof message.prompt === "string" && message.prompt.trim()) settings = await GPTWULF.Storage.setSettings({ prompt: message.prompt });
+        autoReply.configure(settings);
         await autoReply.submitOnce();
         return buildStatus();
       case GPTWULF.MESSAGE_TYPES.ENABLE_AUTO_REPLY:
         settings = await GPTWULF.Storage.setSettings({ autoReplyEnabled: true });
         autoReply.configure(settings);
+        await autoReply.submitOnce();
         return buildStatus();
       case GPTWULF.MESSAGE_TYPES.DISABLE_AUTO_REPLY:
         settings = await GPTWULF.Storage.setSettings({ autoReplyEnabled: false });
@@ -129,19 +116,12 @@
   };
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    Promise.resolve(handleMessage(message))
-      .then(sendResponse)
-      .catch((error) => sendResponse({ error: error.message }));
+    Promise.resolve(handleMessage(message)).then(sendResponse).catch((error) => sendResponse({ error: error.message }));
     return true;
   });
 
   const observer = new MutationObserver(scheduleStateCheck);
-  observer.observe(document.documentElement, {
-    subtree: true,
-    childList: true,
-    attributes: true,
-    attributeFilter: ["disabled", "aria-label", "data-testid", "class"]
-  });
+  observer.observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["disabled", "aria-label", "data-testid", "class"] });
 
   for (const method of ["pushState", "replaceState"]) {
     const original = history[method];
