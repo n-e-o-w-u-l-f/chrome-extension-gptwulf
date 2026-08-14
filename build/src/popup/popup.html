@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>GPT-Wulf</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="gptwulf-popup">
+    <header><strong>GPT-Wulf</strong><span class="gptwulf-connection" data-connection>● Nicht verbunden</span></header>
+    <section><div class="gptwulf-label">Status</div><div class="gptwulf-status" data-status>● Unbekannt</div></section>
+    <section><label class="gptwulf-label" for="prompt">Prompt</label><textarea id="prompt" placeholder="Dein Prompt"></textarea></section>
+    <label class="gptwulf-row"><input type="checkbox" id="autoReply"> Auto Reply</label>
+    <label class="gptwulf-row"><input type="checkbox" id="repeatMode"> Wiederholen</label>
+    <button id="send" type="button">Prompt senden</button>
+    <div class="gptwulf-error" data-error hidden></div>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
